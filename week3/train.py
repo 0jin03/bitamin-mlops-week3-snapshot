@@ -148,6 +148,7 @@ def main():
         entity=ENTITY,
         project=PROJECT,
         name=make_run_name(args.model, params),
+        group=args.model,  # [STEP 2] 모델 종류별로 묶어 보기
         config={"model": args.model, "seed": args.seed, **params},
     )
 
@@ -155,11 +156,18 @@ def main():
     model = build_model(args.model, params, args.seed, X_train)
     model.fit(X_train, y_train)
 
+    train_metrics = evaluate(model, X_train, y_train)  # [STEP 2] 과적합 확인용
     valid_metrics = evaluate(model, X_valid, y_valid)
+    print_metrics("train", train_metrics)
     print_metrics("valid", valid_metrics)
 
     # [STEP 1] 결과 기록 후 run 종료
-    run.log({f"valid/{k}": v for k, v in valid_metrics.items()})
+    # [STEP 2] train 지표와 과적합 정도(gap = train AUC - valid AUC)도 함께 기록
+    run.log({
+        **{f"train/{k}": v for k, v in train_metrics.items()},
+        **{f"valid/{k}": v for k, v in valid_metrics.items()},
+        "gap/roc_auc": train_metrics["roc_auc"] - valid_metrics["roc_auc"],
+    })
     run.finish()
 
 
