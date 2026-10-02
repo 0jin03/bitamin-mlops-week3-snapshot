@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+import wandb  # [STEP 1]
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -27,6 +28,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 ROOT = Path(__file__).resolve().parent.parent  # 조별 repo 최상위 폴더
 DATA_PATH = ROOT / "WA_FnUseC_TelcoCustomerChurn.csv"
 SPLIT_SEED = 42  # 데이터 분할 seed는 모든 실험에서 고정 (모델 seed와 분리)
+
+# [STEP 1] W&B 기록 위치 — 조원 모두 같은 값을 사용
+ENTITY = None  # 조별 W&B Team 이름 (예: "bitamin17-mlops-3"), Team이 없으면 None → 개인 계정
+PROJECT = "bitamin17-week3-churn"
 
 
 # 1. 실행 인자: 코드를 고치지 않고 실험 조건만 바꿔서 실행
@@ -138,12 +143,24 @@ def main():
     params = get_params(args)
     print(f"model={args.model} seed={args.seed} params={params}")
 
+    # [STEP 1] run 시작: 어떤 조건으로 실험했는지(config) 기록
+    run = wandb.init(
+        entity=ENTITY,
+        project=PROJECT,
+        name=make_run_name(args.model, params),
+        config={"model": args.model, "seed": args.seed, **params},
+    )
+
     # 6. 학습 및 valid 평가
     model = build_model(args.model, params, args.seed, X_train)
     model.fit(X_train, y_train)
 
     valid_metrics = evaluate(model, X_valid, y_valid)
     print_metrics("valid", valid_metrics)
+
+    # [STEP 1] 결과 기록 후 run 종료
+    run.log({f"valid/{k}": v for k, v in valid_metrics.items()})
+    run.finish()
 
 
 if __name__ == "__main__":
