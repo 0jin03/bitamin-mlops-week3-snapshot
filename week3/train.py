@@ -14,6 +14,7 @@
 import argparse
 from pathlib import Path
 
+import joblib  # [STEP 4]
 import pandas as pd
 import wandb  # [STEP 1]
 from sklearn.compose import ColumnTransformer
@@ -27,6 +28,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 ROOT = Path(__file__).resolve().parent.parent  # 조별 repo 최상위 폴더
 DATA_PATH = ROOT / "WA_FnUseC_TelcoCustomerChurn.csv"
+MODEL_PATH = ROOT / "models" / "churn_model.joblib"  # [STEP 4] models/는 .gitignore 대상
 SPLIT_SEED = 42  # 데이터 분할 seed는 모든 실험에서 고정 (모델 seed와 분리)
 
 # [STEP 1] W&B 기록 위치 — 조원 모두 같은 값을 사용
@@ -45,6 +47,7 @@ def parse_args():
     p.add_argument("--max_depth", type=int, default=None)             # rf: 기본 제한 없음 / gb: 기본 3
     p.add_argument("--min_samples_leaf", type=int, default=1)         # rf: 잎 노드 최소 샘플 수
     p.add_argument("--learning_rate", type=float, default=0.1)        # gb: 학습률
+    p.add_argument("--save", action="store_true")                     # [STEP 4] 최종 모델 저장
     return p.parse_args()
 
 
@@ -180,6 +183,23 @@ def main():
             y_valid.tolist(), valid_proba.tolist(), labels=["stay", "churn"], classes_to_plot=[1]
         ),
     })
+
+    # [STEP 4] 최종 모델 저장: train+valid 전체로 다시 학습 → test로 한 번만 평가 → 파일 저장 + W&B Artifact
+    if args.save:
+        final_model = build_model(args.model, params, args.seed, X_train)
+        final_model.fit(pd.concat([X_train, X_valid]), pd.concat([y_train, y_valid]))
+        test_metrics = evaluate(final_model, X_test, y_test)
+        print_metrics("test", test_metrics)
+        run.log({f"test/{k}": v for k, v in test_metrics.items()})
+
+        MODEL_PATH.parent.mkdir(exist_ok=True)
+        joblib.dump(final_model, MODEL_PATH)
+        print(f"saved: {MODEL_PATH.relative_to(ROOT)}")
+
+        artifact = wandb.Artifact("churn-model", type="model", metadata={"model": args.model, **params})
+        artifact.add_file(str(MODEL_PATH))
+        run.log_artifact(artifact)
+
     run.finish()
 
 
