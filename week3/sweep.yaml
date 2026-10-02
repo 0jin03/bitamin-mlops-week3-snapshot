@@ -1,0 +1,28 @@
+# [심화] W&B Sweep — 하이퍼파라미터 탐색 자동화 (저장소 최상위 폴더에서 실행)
+#   wandb sweep week3/sweep.yaml            → 출력된 "wandb agent ..." 명령을 복사
+#   wandb agent <entity>/<project>/<sweep_id> --count 5
+# 조원 여러 명이 같은 sweep_id로 agent를 실행하면 탐색을 나눠서 진행합니다.
+# train.py 수정 없이 동작: agent가 아래 값을 --이름=값 인자로 넘겨줍니다.
+program: week3/train.py
+project: bitamin17-week3-churn
+# entity: <조별 W&B Team 이름>    ← train.py의 ENTITY와 같게
+method: random
+metric:
+  name: valid/roc_auc
+  goal: maximize
+parameters:
+  model:
+    value: rf
+  n_estimators:
+    values: [100, 200, 400]
+  max_depth:
+    values: [4, 6, 8, 10, 14]
+  min_samples_leaf:
+    values: [1, 5, 10, 20]
+  class_weight:
+    values: [none, balanced]
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args}

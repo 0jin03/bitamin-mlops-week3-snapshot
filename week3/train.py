@@ -21,7 +21,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, log_loss, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -183,6 +183,20 @@ def main():
             y_valid.tolist(), valid_proba.tolist(), labels=["stay", "churn"], classes_to_plot=[1]
         ),
     })
+
+    # [심화] GB 학습 곡선: 트리를 하나씩 더할 때마다 valid log-loss 기록 → 과적합 시작 지점 확인
+    if args.model == "gb":
+        run.define_metric("curve/*", step_metric="n_trees")
+        Xt = model.named_steps["preprocessor"].transform(X_train)
+        Xv = model.named_steps["preprocessor"].transform(X_valid)
+        gb = model.named_steps["classifier"]
+        for n_trees, (pt, pv) in enumerate(zip(gb.staged_predict_proba(Xt), gb.staged_predict_proba(Xv)), start=1):
+            if n_trees % 5 == 0:
+                run.log({
+                    "n_trees": n_trees,
+                    "curve/train_logloss": log_loss(y_train, pt[:, 1]),
+                    "curve/valid_logloss": log_loss(y_valid, pv[:, 1]),
+                })
 
     # [STEP 4] 최종 모델 저장: train+valid 전체로 다시 학습 → test로 한 번만 평가 → 파일 저장 + W&B Artifact
     if args.save:
