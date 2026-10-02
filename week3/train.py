@@ -168,6 +168,18 @@ def main():
         **{f"valid/{k}": v for k, v in valid_metrics.items()},
         "gap/roc_auc": train_metrics["roc_auc"] - valid_metrics["roc_auc"],
     })
+
+    # [STEP 3] 평가 그래프 기록: 혼동행렬 + ROC 곡선 (valid 기준)
+    valid_pred = model.predict(X_valid)
+    valid_proba = model.predict_proba(X_valid)
+    run.log({
+        "plots/confusion_matrix": wandb.plot.confusion_matrix(
+            y_true=y_valid.tolist(), preds=valid_pred.tolist(), class_names=["stay", "churn"]
+        ),
+        "plots/roc_curve": wandb.plot.roc_curve(
+            y_valid.tolist(), valid_proba.tolist(), labels=["stay", "churn"], classes_to_plot=[1]
+        ),
+    })
     run.finish()
 
 
